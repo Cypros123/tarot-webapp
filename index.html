@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Выбор карт — 3 из 7</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
@@ -10,7 +10,10 @@
       --bg1:#0e0b0d; --bg2:#24161a;
       --gold:#d9b36c; --accent:#e9c891; --ink:#f5f1e8; --muted:#bda78b;
       --card:#241215; --card-edge:#6d3b3f; --glow: 0 0 24px rgba(233,200,145,.55);
-      --cardW: 116px; --ratio: 1.6;
+      --cardW: 116px; --ratio: 1.6; /* 5:8 */
+      --gap: 14px;
+      --safeTop: env(safe-area-inset-top);
+      --safeBottom: env(safe-area-inset-bottom);
     }
     *{box-sizing:border-box}
     html,body{height:100%}
@@ -24,7 +27,7 @@
     }
     header{
       position:sticky; top:0; z-index:5;
-      padding:14px 16px 10px;
+      padding:calc(10px + var(--safeTop)) 16px 10px;
       background:linear-gradient(180deg, rgba(0,0,0,.6), rgba(0,0,0,0));
       border-bottom:1px solid rgba(255,255,255,.08);
       backdrop-filter: blur(4px);
@@ -32,11 +35,11 @@
     .title{font-weight:700; font-size:16px; letter-spacing:.2px}
     .subtitle{font-size:12px; color:var(--muted)}
 
-    .wrap{padding:16px; max-width:960px; width:100%; margin:0 auto;}
+    .wrap{padding:12px 14px calc(12px + var(--safeBottom)); max-width:960px; width:100%; margin:0 auto;}
     .rows{display:flex; flex-direction:column; gap:16px; align-items:center; justify-content:center;}
-    .row{ display:flex; gap:14px; justify-content:center; align-items:flex-start; width:100%; }
-    .row.r1{ flex-wrap:nowrap; }
-    .row.r2{ flex-wrap:nowrap; justify-content:center; }
+    .row{ display:flex; gap:var(--gap); justify-content:center; align-items:flex-start; width:100%; flex-wrap:nowrap; }
+    .row.r1{ /* верхние 3 карты */ }
+    .row.r2{ /* нижние 4 карты */ }
 
     .card{
       width:var(--cardW);
@@ -47,9 +50,10 @@
     }
     .card-inner{
       position:absolute; inset:0; transform-style:preserve-3d;
-      transition: transform 1s ease-in-out, box-shadow .35s ease;
+      transition: transform 1s ease-in-out, box-shadow .35s ease; /* flip = 1.0s */
       border-radius:14px; overflow:hidden;
       box-shadow:0 10px 22px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.04);
+      will-change: transform;
     }
     .card:hover .card-inner{ transform: translateY(-1px); }
     .card.selected .card-inner{ transform: rotateY(180deg); box-shadow: var(--glow), 0 10px 22px rgba(0,0,0,.55); }
@@ -85,7 +89,8 @@
 
     .finalbar{
       position:fixed; left:0; right:0; bottom:0; z-index:7;
-      padding:16px; display:none; gap:12px; align-items:center; justify-content:center; flex-direction:column;
+      padding:16px calc(16px + var(--safeBottom));
+      display:none; gap:12px; align-items:center; justify-content:center; flex-direction:column;
       background:linear-gradient(0deg, rgba(0,0,0,.72), rgba(0,0,0,.0));
     }
     .finalbar.show{ display:flex; }
@@ -105,10 +110,6 @@
     .fly-card{ position:absolute; width:var(--cardW); height:calc(var(--cardW)*var(--ratio)); border-radius:14px; will-change: transform; transition: transform 1.5s ease-in-out; }
     .fade-out{ opacity:0; transition: opacity .35s ease; }
     body.centered .rows{ opacity:0; pointer-events:none; transition: opacity .35s ease; }
-
-    @media (max-width: 380px){
-      :root{ --cardW: 108px; }
-    }
   </style>
 </head>
 <body>
@@ -162,7 +163,7 @@
         <div class='sigil' aria-hidden='true'>
           <svg viewBox='0 0 100 100' fill='none' xmlns='http://www.w3.org/2000/svg'>
             <circle cx='50' cy='50' r='30' stroke='${getComputedStyle(document.documentElement).getPropertyValue('--gold').trim()}' stroke-width='3' />
-            <path d='M50 22 L54 46 L78 50 L54 54 L50 78 L46 54 L22 50 L46 46 Z' stroke='${getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()}' stroke-width='2'/>
+            <path d='M50 22 L54 46 L78 50 L54 54 L50 78 L46 54 L22 50 L46 46 З' stroke='${getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()}' stroke-width='2'/>
           </svg>
         </div>`;
 
@@ -180,9 +181,34 @@
       return card;
     }
 
+    function computeCardWidth(){
+      const vw = Math.min(window.innerWidth, document.documentElement.clientWidth);
+      const vh = Math.min(window.innerHeight, document.documentElement.clientHeight);
+      const gap = 14; // px
+      // ограничение по ширине: 3 карты наверху, 4 внизу
+      const maxWByRowTop = (vw - gap*2 - 28) / 3;   // 3 карты + поля
+      const maxWByRowBot = (vw - gap*3 - 28) / 4;   // 4 карты + поля
+      const maxWByWidth = Math.min(maxWByRowTop, maxWByRowBot);
+
+      // ограничение по высоте: две строки + зазор
+      const headerH = 72; // примерно
+      const bottomPad = 24;
+      const availableH = vh - headerH - bottomPad - 20; // запас
+      const maxWByHeight = (availableH - 16) / (2 * 1.6); // 2 ряда, aspect 1.6
+
+      // комфортный предел на больших экранах
+      const comfort = 140;
+
+      const cardW = Math.max(90, Math.min(comfort, maxWByWidth, maxWByHeight));
+      document.documentElement.style.setProperty('--cardW', cardW + 'px');
+    }
+
     function build(){
+      computeCardWidth();
       for (let i=0;i<3;i++) r1.appendChild(makeCard(ids[i]));
       for (let i=3;i<7;i++) r2.appendChild(makeCard(ids[i]));
+      window.addEventListener('resize', computeCardWidth, {passive:true});
+      window.addEventListener('orientationchange', ()=>setTimeout(computeCardWidth, 100));
     }
 
     function select(card, id){
@@ -237,9 +263,9 @@
         c.style.top  = rect.top  + 'px';
         c.style.transform = 'translate(0,0) scale(1,1)'; // старт без сдвига
         c.innerHTML = `
-          <div class="card-inner" style="transform:rotateY(180deg);">
-            <div class="face">
-              <div class="art"><img src="${faceUrl(id)}" alt="card"></div>
+          <div class=\"card-inner\" style=\"transform:rotateY(180deg);\">
+            <div class=\"face\">
+              <div class=\"art\"><img src=\"${faceUrl(id)}\" alt=\"card\"></div>
             </div>
           </div>`;
         fly.appendChild(c);
@@ -248,12 +274,12 @@
 
       // целевая компоновка по центру (анимируем ТОЛЬКО transform)
       const gap = 16;
-      const cssW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cardW'));
-      const targetW = Math.min(150, Math.max(110, cssW + 8));
+      const cardW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cardW'));
+      const targetW = Math.min(150, Math.max(100, cardW + 6)); // чуть крупнее
       const targetH = targetW * 1.6;
       const totalW  = targetW*3 + gap*2;
       const startX  = (window.innerWidth - totalW)/2;
-      const y       = (window.innerHeight - targetH)/2 + 24;
+      const y       = (window.innerHeight - targetH)/2 + 20;
 
       clones.forEach(({el, rect}, i)=>{
         const tx = startX + i*(targetW+gap);
@@ -263,11 +289,9 @@
         const sx = targetW / rect.width;
         const sy = targetH / rect.height;
 
-        // Стагер + изменение только transform (left/top НЕ трогаем)
         el.style.transition = 'transform 1.5s ease-in-out';
         el.style.transitionDelay = (i * 150) + 'ms';
 
-        // двойной rAF для надёжности
         requestAnimationFrame(()=>{
           requestAnimationFrame(()=>{
             el.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
