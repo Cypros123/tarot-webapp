@@ -49,7 +49,7 @@
     }
     .card-inner{
       position:absolute; inset:0; transform-style:preserve-3d;
-      transition: transform .9s ease-in-out, box-shadow .35s ease;
+      transition: transform 1s ease-in-out, box-shadow .35s ease; /* flip = 1s */
       border-radius:14px; overflow:hidden;
       box-shadow:0 10px 22px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.04);
       will-change: transform;
@@ -86,25 +86,26 @@
     }
     .art img{ width:100%; height:100%; object-fit:cover; display:block; }
 
-    /* Кнопка "Продолжить" */
+    /* Кнопка "Продолжить" — позиционируем точно под центровой полосой */
     .contbar{
-      position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
-      display: none; justify-content: center; padding: 16px 16px calc(16px + var(--safeBottom));
-      background: linear-gradient(0deg, rgba(0,0,0,.75), rgba(0,0,0,0));
+      position:fixed; z-index:50;
+      left:50%; transform:translateX(-50%);
+      display:none;
     }
-    .contbar.show{ display:flex; animation: rise .3s ease both; }
-    @keyframes rise{ from{ transform: translateY(8px); opacity:0 } to{ transform: translateY(0); opacity:1 } }
+    .contbar.show{ display:block; animation: rise .25s ease both; }
+    @keyframes rise{ from{ transform: translate(-50%, 6px); opacity:0 } to{ transform: translate(-50%,0); opacity:1 } }
     .contbtn{
       padding: 12px 18px; border-radius: 14px; border: 1px solid rgba(255,255,255,.14);
       font-weight: 700; background: linear-gradient(180deg, rgba(233,200,145,.22), rgba(233,200,145,.10));
       color: var(--ink); cursor: pointer;
+      box-shadow: 0 6px 18px rgba(0,0,0,.35);
     }
 
-    /* Когда карты “отрываем” от потока */
+    /* “Отрываем” выбранные карты от потока и двигаем их самих */
     .floating{
       position:fixed !important; z-index:40;
       margin:0 !important;
-      transition: transform 1.5s ease-in-out !important;
+      transition: transform 1.5s ease-in-out !important; /* move = 1.5s */
       will-change: transform;
     }
 
@@ -124,7 +125,7 @@
     </div>
   </div>
 
-  <!-- Кнопка "Продолжить" -->
+  <!-- Кнопка "Продолжить" (появится под центровыми картами) -->
   <div class="contbar" id="contbar">
     <button class="contbtn" id="btnContinue">Продолжить</button>
   </div>
@@ -135,7 +136,7 @@
     const LIMIT = 3;
     const idsTop = [3,14,27];
     const idsBottom = [45,9,62,71];
-    let selected = [];
+    let selected = []; // числа id в порядке выбора
 
     const rowTop = document.getElementById('rowTop');
     const rowBottom = document.getElementById('rowBottom');
@@ -203,19 +204,25 @@
     function select(card, id){
       if (selected.length >= LIMIT) return;
       if (card.classList.contains('locked')) return;
-      // Сначала включаем переворот
+      // 1) флип
       card.classList.add('selected','locked');
       selected.push(id);
 
-      // Если это третья — даём перевороту стартануть и только потом двигаем
+      // 2) если это третья — ждём окончания ЕЁ флипа, затем двигаем
       if (selected.length === LIMIT) {
-        setTimeout(moveToCenter, 120); // 120мс, чтобы визуально начался флип
-        setTimeout(()=> contbar.classList.add('show'), 1700); // после 1.5s анимации
+        const inner = card.querySelector('.card-inner');
+        const onEnd = (e)=>{
+          if (e.propertyName === 'transform') {
+            inner.removeEventListener('transitionend', onEnd);
+            moveToCenter();
+          }
+        };
+        inner.addEventListener('transitionend', onEnd);
       }
     }
 
     function moveToCenter(){
-      // Затухают невыбранные
+      // 1) невыбранные потухают
       document.querySelectorAll('.card').forEach(el=>{
         const id = Number(el.dataset.id);
         if (!selected.includes(id)){
@@ -224,22 +231,29 @@
         }
       });
 
-      // Выбранные “отрываем” от потока и анимируем ИХ САМИХ в центр
-      const chosen = Array.from(document.querySelectorAll('.card'))
-        .filter(el => selected.includes(Number(el.dataset.id)));
+      // 2) берём САМИ выбранные элементы в порядке выбора
+      const chosen = selected.map(id => document.querySelector(`.card[data-id="${id}"]`));
 
-      const gap = 16;
+      // 3) замеряем их геометрию ДО отрыва
       const rects = chosen.map(el => el.getBoundingClientRect());
+
+      // 4) вычисляем целевую полосу по центру
+      const gap = 16;
       const cardW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cardW'));
       const targetW = Math.min(150, Math.max(100, cardW + 6));
       const targetH = targetW * 1.6;
       const totalW  = targetW*3 + gap*2;
       const startX  = (window.innerWidth - totalW)/2;
-      const y       = (window.innerHeight - targetH)/2 + 10;
+      const y       = (window.innerHeight - targetH)/2 + 6;
 
+      // 5) позиция кнопки: прямо под нижним краем центровой полосы
+      const contTop = y + targetH + 12;
+      contbar.style.top = contTop + 'px';
+      contbar.style.left = '50%'; // уже центрируется через translateX(-50%)
+
+      // 6) “отрываем” и двигаем исходные карты
       chosen.forEach((el, i)=>{
         const r = rects[i];
-        // фиксируем текущие размеры/позицию
         el.style.width  = r.width + 'px';
         el.style.height = r.height + 'px';
         el.style.left   = r.left + 'px';
@@ -253,18 +267,18 @@
         const sx = targetW / r.width;
         const sy = targetH / r.height;
 
-        // запуск анимации трансформа
         requestAnimationFrame(()=>{
           requestAnimationFrame(()=>{
             el.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
           });
         });
       });
+
+      // 7) показать кнопку ПОСЛЕ анимации
+      setTimeout(()=> contbar.classList.add('show'), 1500 + 80);
     }
 
-    function getSelectedIds(){
-      return selected.slice(0,3);
-    }
+    function getSelectedIds(){ return selected.slice(0,3); }
 
     btn.addEventListener('click', () => {
       const payload={ type:'tarot_selection', cards:getSelectedIds() };
