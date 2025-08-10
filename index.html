@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Выбор карт — 3 из 7</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root{ --bg1:#0e0b0d; --bg2:#24161a; --gold:#d9b36c; --accent:#e9c891; --ink:#f5f1e8; --muted:#bda78b; --card:#241215; --card-edge:#6d3b3f; --glow:0 0 24px rgba(233,200,145,.55); }
+    *{box-sizing:border-box} html,body{height:100%}
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,"Noto Sans",sans-serif; color:var(--ink);
+      background: radial-gradient(120% 100% at 50% -10%, rgba(233,200,145,.08), transparent 60%),
+                  radial-gradient(140% 120% at 50% 0%, var(--bg2), var(--bg1) 60%);
+      display:flex; flex-direction:column; min-height:100%; }
+    header{ position:sticky; top:0; z-index:5; padding:14px 16px 10px; background:linear-gradient(180deg, rgba(0,0,0,.6), rgba(0,0,0,0)); border-bottom:1px solid rgba(255,255,255,.08); backdrop-filter: blur(4px); }
+    .title{font-weight:700; font-size:16px; letter-spacing:.2px}
+    .subtitle{font-size:12px; color:var(--muted)}
+    .wrap{padding:14px; max-width:900px; width:100%; margin:0 auto;}
+
+    .grid{ display:grid; gap:14px; grid-template-columns: repeat(4, minmax(0,1fr)); justify-items:center; align-items:start; margin-top:6px; }
+    .grid > .spacer{ grid-column: 1 / span 1; visibility:hidden; }
+    .row3{ grid-column: 2 / span 3; display:contents; }
+    .row4{ grid-column: 1 / span 4; display:contents; }
+
+    .card{ width:100%; max-width:120px; aspect-ratio:5/8; border-radius:14px; position:relative; cursor:pointer; perspective:1000px; }
+    .card-inner{ position:absolute; inset:0; transform-style:preserve-3d; transition:transform .35s ease, box-shadow .25s ease; border-radius:14px; overflow:hidden; box-shadow:0 10px 22px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.04); }
+    .card:hover .card-inner{ transform: translateY(-1px); }
+    .card.selected .card-inner{ transform: rotateY(180deg); box-shadow: var(--glow), 0 10px 22px rgba(0,0,0,.55); }
+    .card.locked{ pointer-events:none; }
+    .face,.back{ position:absolute; inset:0; backface-visibility:hidden; border-radius:14px; }
+    .back{ background: radial-gradient(60% 40% at 30% 20%, rgba(233,200,145,.07), transparent 36%), radial-gradient(50% 40% at 70% 80%, rgba(233,200,145,.05), transparent 40%), linear-gradient(145deg, var(--card), #1a0f12); border:1px solid var(--card-edge); display:flex; align-items:center; justify-content:center; }
+    .sigil{ width:62%; height:62%; border-radius:50%; border:2px dashed rgba(217,179,108,.55); display:grid; place-items:center; filter: drop-shadow(0 2px 4px rgba(0,0,0,.35)); position:relative; }
+    .sigil::after{ content:""; position:absolute; inset:12%; border-radius:50%; border:1px solid rgba(217,179,108,.35); }
+    .sigil svg{ width:70%; opacity:.9; }
+    .face{ transform: rotateY(180deg); background: radial-gradient(140% 120% at 50% -10%, rgba(250,220,150,.10), transparent 60%), linear-gradient(160deg, #2b181b, #1b1013 70%); border:1px solid rgba(255,255,255,.06); display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+    .art{ width:82%; height:86%; border-radius:12px; overflow:hidden; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05), 0 2px 6px rgba(0,0,0,.35); background:#000; }
+    .art img{ width:100%; height:100%; object-fit:cover; display:block; }
+
+    .final{ position:fixed; left:0; right:0; bottom:0; z-index:7; padding:16px; display:none; gap:12px; align-items:center; justify-content:center; flex-direction:column; background:linear-gradient(0deg, rgba(0,0,0,.72), rgba(0,0,0,.0)); }
+    .final.show{ display:flex; }
+    .final-row{ display:flex; gap:12px; }
+    .mini{ width:92px; aspect-ratio:5/8; border-radius:12px; overflow:hidden; box-shadow: var(--glow), 0 8px 16px rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.08); background:#000; }
+    .mini img{ width:100%; height:100%; object-fit:cover; display:block; }
+    .btn{ padding:12px 18px; border-radius:14px; border:1px solid rgba(255,255,255,.14); font-weight:700; background:linear-gradient(180deg, rgba(233,200,145,.22), rgba(233,200,145,.10)); color:var(--ink); cursor:pointer; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">Выберите 3 карты</div>
+    <div class="subtitle">Коснитесь карты — она перевернётся и выбор закрепится</div>
+  </header>
+
+  <div class="wrap">
+    <div class="grid" id="grid">
+      <div class="spacer"></div>
+      <div class="row3"></div>
+      <div class="row4"></div>
+    </div>
+  </div>
+
+  <div class="final" id="final">
+    <div class="final-row" id="finalRow"></div>
+    <button class="btn" id="confirm">Продолжить</button>
+  </div>
+
+  <script>
+    const tg = window.Telegram?.WebApp; if (tg){tg.ready(); tg.expand();}
+    const LIMIT = 3;
+    const ids = [3,14,27,45,9,62,71];
+
+    const row3 = document.querySelector('.row3');
+    const row4 = document.querySelector('.row4');
+    const finalBar = document.getElementById('final');
+    const finalRow = document.getElementById('finalRow');
+    const btn = document.getElementById('confirm');
+    let selected = [];
+
+    function faceUrl(id){ return `faces/${id%22}.png`; }
+
+    function makeCard(id){
+      const card = document.createElement('button');
+      card.className = 'card'; card.type='button'; card.dataset.id = String(id);
+      const inner = document.createElement('div'); inner.className='card-inner';
+      const back = document.createElement('div'); back.className='back';
+      back.innerHTML = `<div class='sigil' aria-hidden='true'>
+          <svg viewBox='0 0 100 100' fill='none' xmlns='http://www.w3.org/2000/svg'>
+            <circle cx='50' cy='50' r='30' stroke='${getComputedStyle(document.documentElement).getPropertyValue('--gold').trim()}' stroke-width='3' />
+            <path d='M50 22 L54 46 L78 50 L54 54 L50 78 L46 54 L22 50 L46 46 Z' stroke='${getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()}' stroke-width='2'/>
+          </svg></div>`;
+      const face = document.createElement('div'); face.className='face';
+      const art = document.createElement('div'); art.className='art';
+      const img = document.createElement('img'); img.src=faceUrl(id); img.alt='card';
+      art.appendChild(img); face.appendChild(art);
+      inner.appendChild(back); inner.appendChild(face);
+      card.appendChild(inner);
+      card.addEventListener('click',()=>select(card,id));
+      return card;
+    }
+
+    function build(){ for(let i=0;i<3;i++) row3.appendChild(makeCard(ids[i])); for(let i=3;i<7;i++) row4.appendChild(makeCard(ids[i])); }
+
+    function select(card,id){
+      if (selected.length>=LIMIT) return;
+      if (card.classList.contains('locked')) return;
+      card.classList.add('selected','locked'); selected.push(id);
+      if (selected.length===LIMIT) showFinal();
+    }
+
+    function showFinal(){
+      finalRow.innerHTML='';
+      selected.forEach(id=>{ const box=document.createElement('div'); box.className='mini'; const img=document.createElement('img'); img.src=faceUrl(id); box.appendChild(img); finalRow.appendChild(box); });
+      finalBar.classList.add('show');
+    }
+
+    btn.addEventListener('click', ()=>{
+      const payload={type:'tarot_selection', cards:selected};
+      if (tg){ tg.sendData(JSON.stringify(payload)); tg.close(); } else { alert(JSON.stringify(payload)); }
+    });
+
+    build();
+  </script>
+</body>
+</html>
