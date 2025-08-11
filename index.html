@@ -1,137 +1,229 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Выбор карт</title>
-<style>
-  :root { --card-w: 112px; --card-h: 176px; }
-  * { box-sizing: border-box; }
-  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background:#0b0b15; color:#eee; height:100vh; display:flex; align-items:center; justify-content:center; }
-  .wrap { width:100%; max-width:440px; padding:16px; }
-  h1 { font-size:18px; text-align:center; margin:0 0 10px; }
-  .table { position:relative; width:100%; height: calc(var(--card-h) * 2 + 26px + 40px); }
-  .row { display:flex; justify-content:center; gap:12px; margin-bottom:13px; }
-  .row:last-child { margin-bottom:0; }
-  .card {
-    width:var(--card-w); height:var(--card-h);
-    border-radius:10px; background:#cdb; position:relative;
-    transform-style:preserve-3d; cursor:pointer; transition: transform 0.6s ease;
-    box-shadow: 0 8px 24px rgba(0,0,0,.4);
-  }
-  .card.flipped { transform: rotateY(180deg); }
-  .face, .back {
-    position:absolute; inset:0; backface-visibility:hidden; border-radius:10px;
-    display:flex; align-items:center; justify-content:center; font-weight:600;
-  }
-  .back { background:#e7dfc7; transform: rotateY(180deg); padding:8px; text-align:center; }
-  .face { background:#1b1b28; color:#ffe28a; }
-  .glow { box-shadow:0 0 0 rgba(255,255,255,0); }
-  .card.selected .glow { animation:halo 1.4s ease infinite; }
-  @keyframes halo { 0%{box-shadow:0 0 0 rgba(255,255,255,0);} 50%{box-shadow:0 0 24px rgba(255,255,255,.35);} 100%{box-shadow:0 0 0 rgba(255,255,255,0);} }
-
-  .bottom { position:fixed; left:0; right:0; bottom:16px; display:flex; justify-content:center; }
-  .btn {
-    min-width:220px; padding:14px 18px; border-radius:14px; font-weight:700; border:none;
-    background:linear-gradient(135deg,#4b75ff,#9e74ff); color:#fff; font-size:16px;
-    box-shadow: 0 10px 30px rgba(100,80,255,.4); transform: translateY(120px);
-    transition: transform .6s ease, opacity .6s ease; opacity:0;
-  }
-  .btn.show { transform: translateY(0); opacity:1; }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Tarot WebApp</title>
+  <style>
+    :root{
+      --card-w: 96px;
+      --card-h: 152px;
+      --gap: 12px;
+      --flip-ms: 420ms;
+      --move-ms: 600ms;
+    }
+    *{box-sizing:border-box}
+    html,body{
+      margin:0; padding:0; height:100%;
+      background: radial-gradient(120% 120% at 50% 0%, #1e1a25, #0d0b11 70%) fixed;
+      color:#f1e9ff; font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .wrap{
+      min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+      padding: clamp(8px, 2.5vw, 24px);
+      gap: 18px;
+    }
+    .board{
+      position:relative;
+      width: calc( (var(--card-w) * 4) + (var(--gap) * 3) );
+      height: calc( (var(--card-h) * 2) + (var(--gap) * 1) );
+      transform: translateZ(0);
+    }
+    /* responsive scale so both rows fit on small screens */
+    @media (max-width: 420px){
+      .board{ transform: scale(.9); transform-origin: top center; }
+    }
+    @media (max-width: 360px){
+      .board{ transform: scale(.82); }
+    }
+    .card{
+      position:absolute;
+      width:var(--card-w); height:var(--card-h);
+      border-radius:12px;
+      transform-style:preserve-3d;
+      transform: translate3d(0,0,0) rotateY(0);
+      transition:
+        transform var(--flip-ms) ease,
+        left var(--move-ms) cubic-bezier(.2,.7,.2,1),
+        top var(--move-ms) cubic-bezier(.2,.7,.2,1);
+      cursor:pointer;
+      box-shadow: 0 8px 18px rgba(0,0,0,.45);
+      will-change: transform, left, top;
+      perspective: 1000px;
+    }
+    .card.is-flipped{
+      transform: translate3d(0,0,0) rotateY(180deg);
+    }
+    .face{
+      position:absolute; inset:0;
+      backface-visibility:hidden;
+      border-radius:12px; overflow:hidden;
+    }
+    .face.back{
+      background:
+        linear-gradient(180deg, rgba(255,231,164,.12), rgba(94,61,27,.1)),
+        url('faces/back.png?v=11') center/cover no-repeat;
+    }
+    .face.front{
+      transform: rotateY(180deg);
+      background: #1b1523;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .face.front img{ width:100%; height:100%; object-fit:cover; display:block; }
+    .hint{
+      opacity:.8; font-size:14px; text-align:center;
+    }
+    .cta{
+      display:none;
+      width:100%;
+      max-width:420px;
+      justify-content:center;
+    }
+    .cta button{
+      appearance:none; border:0; border-radius:12px;
+      padding:14px 16px; width:100%;
+      background: linear-gradient(180deg, #f6d37c, #e8a837);
+      color:#2a1d0b; font-weight:700; font-size:16px;
+      box-shadow: 0 6px 14px rgba(232,168,55,.35);
+    }
+    .cta.show{ display:flex; }
+  </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>Выберите 3 карты</h1>
-  <div id="table" class="table">
-    <div class="row" id="r1"></div>
-    <div class="row" id="r2"></div>
+  <div class="wrap">
+    <div class="board" id="board" aria-label="Выберите 3 карты"></div>
+    <div class="hint" id="hint">Откройте любую карту. Нужно выбрать ровно 3.</div>
+    <div class="cta" id="cta"><button id="continueBtn">Продолжить</button></div>
   </div>
-</div>
-<div class="bottom"><button id="go" class="btn">Продолжить</button></div>
 
-<script>
-  // Mini deck (примерные названия для демо)
-  const faces = [
-    "Десятка кубков","Влюблённые","Двойка кубков","Туз мечей","Справедливость","Императрица","Колесница"
-  ];
+  <script>
+    // ------- Config -------
+    const FACES = Array.from({length: 22}, (_,i)=>`faces/${i}.png?v=11`);
+    const COUNT = 7;            // 3 + 4
+    const NEED = 3;             // choose exactly
+    const GAP = 12;
+    const CW = 96, CH = 152;
 
-  const r1 = document.getElementById('r1'); // top 3
-  const r2 = document.getElementById('r2'); // bottom 4
-  const go = document.getElementById('go');
+    const board = document.getElementById('board');
+    const cta = document.getElementById('cta');
+    const hint = document.getElementById('hint');
+    const continueBtn = document.getElementById('continueBtn');
 
-  // Build 3 + 4
-  function cardEl(i){
-    const d = document.createElement('div');
-    d.className = 'card'; d.dataset.idx = i;
-    d.innerHTML = '<div class="face"><span>🜁</span></div><div class="back"><div class="glow"></div><span>'+faces[i]+'</span></div>';
-    d.addEventListener('click', onFlip, {once:false});
-    return d;
-  }
-  [0,1,2].forEach(i=>r1.appendChild(cardEl(i)));
-  [3,4,5,6].forEach(i=>r2.appendChild(cardEl(i)));
-
-  let picks = [];
-  let animating=false;
-
-  function onFlip(e){
-    if(animating) return;
-    const c = e.currentTarget;
-    if(c.classList.contains('flipped')) return;
-    if(picks.length>=3) return;
-    c.classList.add('flipped','selected');
-    picks.push(c.querySelector('.back span').innerText);
-    if(picks.length===3){
-      // wait flip end of the last card, then move
-      animating = true;
-      setTimeout(()=> moveToCenter(), 650);
+    // Layout positions (grid 4 x 2)
+    function posOf(idx){
+      const row = idx < 3 ? 0 : 1;     // 3 in first row, others in second
+      const col = row === 0 ? idx : (idx-3); // 0..2 for row0, 0..3 for row1 (but we use only 4 cards max place)
+      const left = col * (CW + GAP);
+      const top  = row * (CH + GAP);
+      return {left, top};
     }
-  }
 
-  function moveToCenter(){
-    const sel = Array.from(document.querySelectorAll('.card.selected'));
-    const tbl = document.getElementById('table').getBoundingClientRect();
+    // Prepare unique random faces
+    function pickUnique(arr, n){
+      const pool = [...arr];
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+      return pool.slice(0, n);
+    }
 
-    // target line center positions (center of table)
-    const gap=12, W=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--card-w')), H=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--card-h'));
-    const totalW = W*3 + gap*2;
-    const left0 = (tbl.width - totalW)/2;
+    const facesPicked = pickUnique(FACES, COUNT);
 
-    sel.forEach((el, idx)=>{
-      const r = el.getBoundingClientRect();
-      const curX = r.left - tbl.left;
-      const curY = r.top - tbl.top;
-      const targetX = left0 + idx*(W+gap);
-      const targetY = (tbl.height - H)/2;
+    // Build cards
+    const cards = [];
+    for (let i=0;i<COUNT;i++){
+      const card = document.createElement('div');
+      card.className = 'card';
+      const {left, top} = posOf(i<3?i: (i)); // initial positions in 3+4 grid
+      // For row 1 (i>=3) we place 4th slot too; last card will occupy col=3
+      card.style.left = left + 'px';
+      card.style.top = (i<3 ? 0 : (CH + GAP)) + 'px';
 
-      const dx = targetX - curX;
-      const dy = targetY - curY;
-      el.style.transition = 'transform 700ms ease';
-      el.style.transform += ` translate(${dx}px, ${dy}px)`;
+      const back = document.createElement('div');
+      back.className = 'face back';
+
+      const front = document.createElement('div');
+      front.className = 'face front';
+      const img = document.createElement('img');
+      img.src = facesPicked[i];
+      front.appendChild(img);
+
+      card.appendChild(back);
+      card.appendChild(front);
+      board.appendChild(card);
+
+      cards.push({el:card, idx:i, flipped:false, moving:false});
+    }
+
+    let opened = 0;
+    let lastFlipped = null;
+
+    function onCardClick(cardObj){
+      if (cardObj.flipped) return;             // can't unflip
+      if (opened >= NEED) return;               // block after 3
+      cardObj.flipped = true;
+      cardObj.el.classList.add('is-flipped');
+      opened += 1;
+      lastFlipped = cardObj;
+
+      if (opened < NEED){
+        hint.textContent = `Осталось выбрать: ${NEED - opened}`;
+      } else {
+        hint.textContent = 'Отлично! Готовим карты…';
+        // Wait for the LAST flip transition to finish, then move to center
+        const onEnd = (e)=>{
+          if (e.propertyName !== 'transform') return;
+          cardObj.el.removeEventListener('transitionend', onEnd);
+          centerSelected();
+        };
+        cardObj.el.addEventListener('transitionend', onEnd);
+      }
+    }
+
+    // Position three selected cards as a centered row (columns 0..2)
+    function centerSelected(){
+      const selected = cards.filter(c=>c.flipped);
+      // Compute center offset inside board (width for 4 cols)
+      // We'll center a 3-card row within the 4-col area
+      const totalW = 4*CW + 3*GAP;
+      const rowW = 3*CW + 2*GAP;
+      const offsetLeft = (totalW - rowW)/2;
+
+      selected.forEach((c, k)=>{
+        const left = Math.round(offsetLeft + k*(CW+GAP));
+        const top  = Math.round(CH + GAP); // place in 2nd row area (visually middle of board)
+        c.el.style.left = left + 'px';
+        c.el.style.top = top + 'px';
+      });
+
+      // Show CTA below the cards, aligned with board width
+      cta.classList.add('show');
+    }
+
+    // Attach handlers
+    cards.forEach(c=> c.el.addEventListener('click', ()=>onCardClick(c)) );
+
+    // Prevent double-tap zoom on iOS
+    let lastTouch = 0;
+    document.addEventListener('touchend', e=>{
+      const now = Date.now();
+      if (now - lastTouch <= 350){ e.preventDefault(); }
+      lastTouch = now;
+    }, {passive:false});
+
+    continueBtn.addEventListener('click', ()=>{
+      // notify Telegram mini app (if available)
+      try{
+        if (window.Telegram && Telegram.WebApp) {
+          Telegram.WebApp.sendData(JSON.stringify({type:"selection_done", count:NEED}));
+          Telegram.WebApp.close();
+        }
+      }catch(e){}
+      // fallback: alert
+      alert("Выбор сохранён. Возвращаемся в бота…");
     });
-
-    setTimeout(()=>{
-      animating=false;
-      go.classList.add('show');
-      go.scrollIntoView({behavior:'smooth', block:'end'});
-    }, 750);
-  }
-
-  go.addEventListener('click', ()=>{
-    const data = { cards: picks.join(', ') };
-    if (window.Telegram && Telegram.WebApp) {
-      Telegram.WebApp.sendData(JSON.stringify(data));
-      Telegram.WebApp.close();
-    } else {
-      alert(JSON.stringify(data));
-    }
-  });
-
-  // Telegram theme init if present
-  if (window.Telegram && Telegram.WebApp) {
-    Telegram.WebApp.expand();
-    Telegram.WebApp.ready();
-  }
-</script>
+  </script>
 </body>
 </html>
