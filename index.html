@@ -1,181 +1,292 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Tarot WebApp</title>
+  <title>Выбор карт — 3 из 7</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     :root{
-      --card-w: 96px;
-      --card-h: 152px;
-      --gap: 12px;
-      --flip-ms: 420ms;
-      --move-ms: 800ms;
-      --ease: cubic-bezier(.2,.7,.2,1);
+      --bg1:#0e0b0d; --bg2:#1a1215;
+      --gold:#d9b36c; --ink:#f3efe6; --muted:#b9a795;
+      --cardW: 116px; --ratio: 1.6;
+      --gap: 14px;
+      --safeTop: env(safe-area-inset-top);
+      --safeBottom: env(safe-area-inset-bottom);
     }
     *{box-sizing:border-box}
-    html,body{
-      margin:0; padding:0; height:100%;
-      background: #0b0b0f;
-      color:#eae6ff; font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      -webkit-tap-highlight-color: transparent;
+    html,body{height:100%}
+    body{
+      margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", sans-serif;
+      color:var(--ink);
+      background:
+        radial-gradient(120% 100% at 50% -10%, rgba(233,200,145,.08), transparent 60%),
+        radial-gradient(140% 120% at 50% 0%, var(--bg2), var(--bg1) 60%);
+      display:flex; flex-direction:column; min-height:100%;
+      overflow-x:hidden;
     }
-    .wrap{
-      min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center;
-      padding: clamp(8px, 3vw, 24px);
-      gap: 18px;
+    header{
+      position:sticky; top:0; z-index:5;
+      padding:calc(10px + var(--safeTop)) 16px 10px;
+      background:linear-gradient(180deg, rgba(0,0,0,.6), rgba(0,0,0,0));
+      border-bottom:1px solid rgba(255,255,255,.08);
+      backdrop-filter: blur(4px);
     }
-    .stage{
-      position:relative;
-      width: calc( (var(--card-w) * 4) + (var(--gap) * 3) );
-      height: calc( (var(--card-h) * 2) + (var(--gap) * 1) );
-      transform: translateZ(0);
-    }
-    @media (max-width: 420px){
-      .stage{ transform: scale(.9); transform-origin: top center; }
-    }
-    @media (max-width: 360px){
-      .stage{ transform: scale(.82); }
-    }
+    .title{font-weight:700; font-size:16px; letter-spacing:.2px}
+    .subtitle{font-size:12px; color:var(--muted)}
+    .wrap{padding:12px 14px calc(12px + var(--safeBottom)); max-width:960px; width:100%; margin:0 auto;}
+    .rows{display:flex; flex-direction:column; gap:16px; align-items:center; justify-content:center;}
+    .row{ display:flex; gap:var(--gap); justify-content:center; align-items:flex-start; width:100%; flex-wrap:nowrap; }
 
     .card{
-      position:absolute;
-      width:var(--card-w); height:var(--card-h);
-      border-radius:12px; overflow:hidden;
-      transform-style:preserve-3d;
-      transition: transform var(--flip-ms) ease;
-      cursor:pointer;
-      box-shadow: 0 12px 24px rgba(0,0,0,.55);
+      width:var(--cardW);
+      height:calc(var(--cardW) * var(--ratio));
+      border-radius:14px;
+      position:relative; cursor:pointer; perspective:1000px;
+      flex:0 0 auto;
+      background:none; border:none; padding:0;
+      transition: transform .2s ease;
+    }
+    .card-inner{
+      position:absolute; inset:0; transform-style:preserve-3d;
+      transition: transform 1s ease-in-out, box-shadow .35s ease; /* flip = 1s */
+      border-radius:14px; overflow:hidden;
+      box-shadow:0 10px 22px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.04);
+      will-change: transform;
+      background:#1b1013;
+    }
+    .card.selected .card-inner{ transform: rotateY(180deg); box-shadow: 0 0 22px rgba(233,200,145,.55), 0 10px 22px rgba(0,0,0,.55); }
+    .card.locked{ pointer-events:none; }
+
+    .face,.back{ position:absolute; inset:0; backface-visibility:hidden; border-radius:14px; }
+    .back{
+      background:
+        radial-gradient(60% 40% at 30% 20%, rgba(233,200,145,.07), transparent 36%),
+        radial-gradient(50% 40% at 70% 80%, rgba(233,200,145,.05), transparent 40%),
+        linear-gradient(145deg, #261316, #140b0d);
+      border:1px solid #6d3b3f;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .sigil{ width:62%; height:62%; border-radius:50%; border:2px dashed rgba(217,179,108,.55);
+      display:grid; place-items:center; position:relative; }
+    .sigil::after{ content:""; position:absolute; inset:12%; border-radius:50%; border:1px solid rgba(217,179,108,.35); }
+    .sigil svg{ width:70%; opacity:.9; }
+
+    .face{ transform: rotateY(180deg);
+      background:
+        radial-gradient(140% 120% at 50% -10%, rgba(250,220,150,.10), transparent 60%),
+        linear-gradient(160deg, #2b181b, #1b1013 70%);
+      border:1px solid rgba(255,255,255,.06);
+      display:flex; align-items:center; justify-content:center;
+      position:relative; overflow:hidden;
+    }
+    .art{ width:84%; height:88%; border-radius:12px; overflow:hidden;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.05), 0 2px 6px rgba(0,0,0,.35);
+      background:#000; display:flex; align-items:center; justify-content:center;
+    }
+    .art img{ width:100%; height:100%; object-fit:cover; display:block; }
+
+    /* Кнопка "Продолжить" — позиционируем точно под центровой полосой */
+    .contbar{
+      position:fixed; z-index:50;
+      left:50%; transform:translateX(-50%);
+      display:none;
+    }
+    .contbar.show{ display:block; animation: rise .25s ease both; }
+    @keyframes rise{ from{ transform: translate(-50%, 6px); opacity:0 } to{ transform: translate(-50%,0); opacity:1 } }
+    .contbtn{
+      padding: 12px 18px; border-radius: 14px; border: 1px solid rgba(255,255,255,.14);
+      font-weight: 700; background: linear-gradient(180deg, rgba(233,200,145,.22), rgba(233,200,145,.10));
+      color: var(--ink); cursor: pointer;
+      box-shadow: 0 6px 18px rgba(0,0,0,.35);
+    }
+
+    /* “Отрываем” выбранные карты от потока и двигаем их самих */
+    .floating{
+      position:fixed !important; z-index:40;
+      margin:0 !important;
+      transition: transform 1.5s ease-in-out !important; /* move = 1.5s */
       will-change: transform;
     }
-    .card .face{
-      position:absolute; inset:0;
-      backface-visibility:hidden;
-    }
-    .card .back{
-      background: url('faces/back.png?v=12') center/cover no-repeat;
-    }
-    .card .front{
-      transform: rotateY(180deg);
-    }
-    .card .front img{
-      display:block; width:100%; height:100%; object-fit:cover;
-    }
-    .flipped{ transform: rotateY(180deg) translateZ(0); }
 
-    /* movement layer: we'll animate translate without changing initial left/top */
-    .move{
-      transition: transform var(--move-ms) var(--ease);
-      will-change: transform;
-    }
-
-    .hint{opacity:.85; font-size:14px; text-align:center;}
-    .cta{display:none; width:100%; max-width:420px; justify-content:center;}
-    .cta button{
-      appearance:none; border:0; border-radius:12px;
-      padding:14px 16px; width:100%;
-      background:#f0cd72; color:#241a07; font-weight:700; font-size:16px;
-      box-shadow: 0 6px 14px rgba(240,205,114,.35);
-    }
-    .cta.show{display:flex;}
+    .fade-out{ opacity:0; transition: opacity .35s ease; }
   </style>
 </head>
 <body>
+  <header>
+    <div class="title">Выберите 3 карты</div>
+    <div class="subtitle">Коснитесь карты — она перевернётся и выбор закрепится</div>
+  </header>
+
   <div class="wrap">
-    <div class="stage" id="stage"></div>
-    <div class="hint" id="hint">Выберите 3 карты</div>
-    <div class="cta" id="cta"><button id="go">Продолжить</button></div>
+    <div class="rows">
+      <div class="row" id="rowTop"></div>
+      <div class="row" id="rowBottom"></div>
+    </div>
+  </div>
+
+  <!-- Кнопка "Продолжить" (появится под центровыми картами) -->
+  <div class="contbar" id="contbar">
+    <button class="contbtn" id="btnContinue">Продолжить</button>
   </div>
 
   <script>
-    const STAGE = document.getElementById('stage');
-    const HINT = document.getElementById('hint');
-    const CTA  = document.getElementById('cta');
-    const GO   = document.getElementById('go');
+    const tg = window.Telegram?.WebApp; if (tg){ tg.ready(); tg.expand(); }
 
-    const CW=96, CH=152, GAP=12, NEED=3, COUNT=7;
-    const faces = Array.from({length:22}, (_,i)=>`faces/${i}.png?v=12`);
+    const LIMIT = 3;
+    const idsTop = [3,14,27];
+    const idsBottom = [45,9,62,71];
+    let selected = []; // числа id в порядке выбора
 
-    function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a}
-    const picked = shuffle([...faces]).slice(0, COUNT);
+    const rowTop = document.getElementById('rowTop');
+    const rowBottom = document.getElementById('rowBottom');
+    const contbar = document.getElementById('contbar');
+    const btn = document.getElementById('btnContinue');
 
-    // initial positions (left/top only once)
-    function xy(i){
-      const row = i < 3 ? 0 : 1;
-      const col = row === 0 ? i : (i-3);
-      return [col*(CW+GAP), row*(CH+GAP)];
+    function faceUrl(id){ return `faces/${id%22}.png`; }
+
+    function computeCardWidth(){
+      const vw = Math.min(window.innerWidth, document.documentElement.clientWidth);
+      const vh = Math.min(window.innerHeight, document.documentElement.clientHeight);
+      const gap = 14;
+      const maxWByRowTop = (vw - gap*2 - 28) / 3;
+      const maxWByRowBot = (vw - gap*3 - 28) / 4;
+      const maxWByWidth = Math.min(maxWByRowTop, maxWByRowBot);
+      const headerH = 72;
+      const bottomPad = 56;
+      const availableH = vh - headerH - bottomPad - 20;
+      const maxWByHeight = (availableH - 16) / (2 * 1.6);
+      const comfort = 140;
+      const cardW = Math.max(92, Math.min(comfort, maxWByWidth, maxWByHeight));
+      document.documentElement.style.setProperty('--cardW', cardW + 'px');
     }
 
-    const cards = [];
-    for (let i=0;i<COUNT;i++){
-      const [l,t] = xy(i);
-      const el = document.createElement('div');
-      el.className = 'card move';
-      el.style.left = l + 'px';
-      el.style.top  = t + 'px';
+    function makeCard(id){
+      const card = document.createElement('button');
+      card.className = 'card';
+      card.type = 'button';
+      card.dataset.id = String(id);
 
-      const back = document.createElement('div'); back.className = 'face back';
-      const front = document.createElement('div'); front.className = 'face front';
-      const img = document.createElement('img'); img.src = picked[i];
-      front.appendChild(img);
+      const inner = document.createElement('div');
+      inner.className = 'card-inner';
 
-      el.appendChild(back); el.appendChild(front);
-      STAGE.appendChild(el);
-      cards.push({el, flipped:false, dx:0, dy:0});
+      const back = document.createElement('div');
+      back.className = 'back';
+      back.innerHTML = `
+        <div class='sigil'>
+          <svg viewBox='0 0 100 100' fill='none' xmlns='http://www.w3.org/2000/svg'>
+            <circle cx='50' cy='50' r='30' stroke='#d9b36c' stroke-width='3' />
+            <path d='M50 22 L54 46 L78 50 L54 54 L50 78 L46 54 L22 50 L46 46 Z' stroke='#e9c891' stroke-width='2'/>
+          </svg>
+        </div>`;
+
+      const face = document.createElement('div');
+      face.className = 'face';
+      const art = document.createElement('div');
+      art.className = 'art';
+      const img = document.createElement('img'); img.src = faceUrl(id); img.alt = 'card';
+      art.appendChild(img); face.appendChild(art);
+
+      inner.appendChild(back); inner.appendChild(face);
+      card.appendChild(inner);
+      card.addEventListener('click', () => select(card, id));
+      return card;
     }
 
-    let opened=0, last=null;
-    function onClick(card){
-      if(card.flipped || opened>=NEED) return;
-      card.flipped = true;
-      card.el.classList.add('flipped');
-      opened++; last=card;
-      HINT.textContent = opened<NEED ? `Осталось выбрать: ${NEED-opened}` : 'Готово';
+    function build(){
+      computeCardWidth();
+      idsTop.forEach(id=> rowTop.appendChild(makeCard(id)));
+      idsBottom.forEach(id=> rowBottom.appendChild(makeCard(id)));
+      window.addEventListener('resize', computeCardWidth, {passive:true});
+      window.addEventListener('orientationchange', ()=>setTimeout(computeCardWidth, 100));
+    }
 
-      if(opened===NEED){
-        const onEnd=(e)=>{
-          if(e.propertyName!=='transform') return;
-          card.el.removeEventListener('transitionend', onEnd);
-          moveToCenter();
+    function select(card, id){
+      if (selected.length >= LIMIT) return;
+      if (card.classList.contains('locked')) return;
+      // 1) флип
+      card.classList.add('selected','locked');
+      selected.push(id);
+
+      // 2) если это третья — ждём окончания ЕЁ флипа, затем двигаем
+      if (selected.length === LIMIT) {
+        const inner = card.querySelector('.card-inner');
+        const onEnd = (e)=>{
+          if (e.propertyName === 'transform') {
+            inner.removeEventListener('transitionend', onEnd);
+            moveToCenter();
+          }
         };
-        card.el.addEventListener('transitionend', onEnd);
+        inner.addEventListener('transitionend', onEnd);
       }
     }
-    cards.forEach(c=> c.el.addEventListener('click', ()=>onClick(c)) );
 
     function moveToCenter(){
-      const chosen = cards.filter(c=>c.flipped);
-      // Compute target X offsets (center 3 cards in 4-col width)
-      const totalW = 4*CW + 3*GAP;
-      const rowW = 3*CW + 2*GAP;
-      const left0 = (totalW - rowW)/2;
-      const topRow = CH + GAP; // visually middle
-
-      chosen.forEach((c,k)=>{
-        // current left/top from style, compute dx/dy to target
-        const curLeft = parseInt(c.el.style.left||0,10);
-        const curTop  = parseInt(c.el.style.top||0,10);
-        const targetLeft = Math.round(left0 + k*(CW+GAP));
-        const targetTop  = Math.round(topRow);
-        const dx = targetLeft - curLeft;
-        const dy = targetTop  - curTop;
-        c.dx = dx; c.dy = dy;
-        c.el.style.transform = `rotateY(180deg) translate(${dx}px, ${dy}px)`;
+      // 1) невыбранные потухают
+      document.querySelectorAll('.card').forEach(el=>{
+        const id = Number(el.dataset.id);
+        if (!selected.includes(id)){
+          el.classList.add('fade-out');
+          el.style.pointerEvents = 'none';
+        }
       });
 
-      CTA.classList.add('show');
+      // 2) берём САМИ выбранные элементы в порядке выбора
+      const chosen = selected.map(id => document.querySelector(`.card[data-id="${id}"]`));
+
+      // 3) замеряем их геометрию ДО отрыва
+      const rects = chosen.map(el => el.getBoundingClientRect());
+
+      // 4) вычисляем целевую полосу по центру
+      const gap = 16;
+      const cardW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cardW'));
+      const targetW = Math.min(150, Math.max(100, cardW + 6));
+      const targetH = targetW * 1.6;
+      const totalW  = targetW*3 + gap*2;
+      const startX  = (window.innerWidth - totalW)/2;
+      const y       = (window.innerHeight - targetH)/2 + 6;
+
+      // 5) позиция кнопки: прямо под нижним краем центровой полосы
+      const contTop = y + targetH + 12;
+      contbar.style.top = contTop + 'px';
+      contbar.style.left = '50%'; // уже центрируется через translateX(-50%)
+
+      // 6) “отрываем” и двигаем исходные карты
+      chosen.forEach((el, i)=>{
+        const r = rects[i];
+        el.style.width  = r.width + 'px';
+        el.style.height = r.height + 'px';
+        el.style.left   = r.left + 'px';
+        el.style.top    = r.top + 'px';
+        el.classList.add('floating');
+
+        const tx = startX + i*(targetW+gap);
+        const ty = y;
+        const dx = tx - r.left;
+        const dy = ty - r.top;
+        const sx = targetW / r.width;
+        const sy = targetH / r.height;
+
+        requestAnimationFrame(()=>{
+          requestAnimationFrame(()=>{
+            el.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
+          });
+        });
+      });
+
+      // 7) показать кнопку ПОСЛЕ анимации
+      setTimeout(()=> contbar.classList.add('show'), 1500 + 80);
     }
 
-    GO.addEventListener('click', ()=>{
-      try{
-        if (window.Telegram && Telegram.WebApp){
-          Telegram.WebApp.sendData(JSON.stringify({type:"selection_done", count:NEED}));
-          Telegram.WebApp.close();
-          return;
-        }
-      }catch(e){}
-      alert('Выбор сохранён. Возвращаемся в бота…');
+    function getSelectedIds(){ return selected.slice(0,3); }
+
+    btn.addEventListener('click', () => {
+      const payload={ type:'tarot_selection', cards:getSelectedIds() };
+      if (tg){ tg.sendData(JSON.stringify(payload)); tg.close(); }
+      else { alert(JSON.stringify(payload)); }
     });
+
+    build();
   </script>
 </body>
 </html>
