@@ -10,219 +10,171 @@
       --card-h: 152px;
       --gap: 12px;
       --flip-ms: 420ms;
-      --move-ms: 600ms;
+      --move-ms: 800ms;
+      --ease: cubic-bezier(.2,.7,.2,1);
     }
     *{box-sizing:border-box}
     html,body{
       margin:0; padding:0; height:100%;
-      background: radial-gradient(120% 120% at 50% 0%, #1e1a25, #0d0b11 70%) fixed;
-      color:#f1e9ff; font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: #0b0b0f;
+      color:#eae6ff; font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
       -webkit-tap-highlight-color: transparent;
     }
     .wrap{
       min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center;
-      padding: clamp(8px, 2.5vw, 24px);
+      padding: clamp(8px, 3vw, 24px);
       gap: 18px;
     }
-    .board{
+    .stage{
       position:relative;
       width: calc( (var(--card-w) * 4) + (var(--gap) * 3) );
       height: calc( (var(--card-h) * 2) + (var(--gap) * 1) );
       transform: translateZ(0);
     }
-    /* responsive scale so both rows fit on small screens */
     @media (max-width: 420px){
-      .board{ transform: scale(.9); transform-origin: top center; }
+      .stage{ transform: scale(.9); transform-origin: top center; }
     }
     @media (max-width: 360px){
-      .board{ transform: scale(.82); }
+      .stage{ transform: scale(.82); }
     }
+
     .card{
       position:absolute;
       width:var(--card-w); height:var(--card-h);
-      border-radius:12px;
+      border-radius:12px; overflow:hidden;
       transform-style:preserve-3d;
-      transform: translate3d(0,0,0) rotateY(0);
-      transition:
-        transform var(--flip-ms) ease,
-        left var(--move-ms) cubic-bezier(.2,.7,.2,1),
-        top var(--move-ms) cubic-bezier(.2,.7,.2,1);
+      transition: transform var(--flip-ms) ease;
       cursor:pointer;
-      box-shadow: 0 8px 18px rgba(0,0,0,.45);
-      will-change: transform, left, top;
-      perspective: 1000px;
+      box-shadow: 0 12px 24px rgba(0,0,0,.55);
+      will-change: transform;
     }
-    .card.is-flipped{
-      transform: translate3d(0,0,0) rotateY(180deg);
-    }
-    .face{
+    .card .face{
       position:absolute; inset:0;
       backface-visibility:hidden;
-      border-radius:12px; overflow:hidden;
     }
-    .face.back{
-      background:
-        linear-gradient(180deg, rgba(255,231,164,.12), rgba(94,61,27,.1)),
-        url('faces/back.png?v=11') center/cover no-repeat;
+    .card .back{
+      background: url('faces/back.png?v=12') center/cover no-repeat;
     }
-    .face.front{
+    .card .front{
       transform: rotateY(180deg);
-      background: #1b1523;
-      display:flex; align-items:center; justify-content:center;
     }
-    .face.front img{ width:100%; height:100%; object-fit:cover; display:block; }
-    .hint{
-      opacity:.8; font-size:14px; text-align:center;
+    .card .front img{
+      display:block; width:100%; height:100%; object-fit:cover;
     }
-    .cta{
-      display:none;
-      width:100%;
-      max-width:420px;
-      justify-content:center;
+    .flipped{ transform: rotateY(180deg) translateZ(0); }
+
+    /* movement layer: we'll animate translate without changing initial left/top */
+    .move{
+      transition: transform var(--move-ms) var(--ease);
+      will-change: transform;
     }
+
+    .hint{opacity:.85; font-size:14px; text-align:center;}
+    .cta{display:none; width:100%; max-width:420px; justify-content:center;}
     .cta button{
       appearance:none; border:0; border-radius:12px;
       padding:14px 16px; width:100%;
-      background: linear-gradient(180deg, #f6d37c, #e8a837);
-      color:#2a1d0b; font-weight:700; font-size:16px;
-      box-shadow: 0 6px 14px rgba(232,168,55,.35);
+      background:#f0cd72; color:#241a07; font-weight:700; font-size:16px;
+      box-shadow: 0 6px 14px rgba(240,205,114,.35);
     }
-    .cta.show{ display:flex; }
+    .cta.show{display:flex;}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="board" id="board" aria-label="Выберите 3 карты"></div>
-    <div class="hint" id="hint">Откройте любую карту. Нужно выбрать ровно 3.</div>
-    <div class="cta" id="cta"><button id="continueBtn">Продолжить</button></div>
+    <div class="stage" id="stage"></div>
+    <div class="hint" id="hint">Выберите 3 карты</div>
+    <div class="cta" id="cta"><button id="go">Продолжить</button></div>
   </div>
 
   <script>
-    // ------- Config -------
-    const FACES = Array.from({length: 22}, (_,i)=>`faces/${i}.png?v=11`);
-    const COUNT = 7;            // 3 + 4
-    const NEED = 3;             // choose exactly
-    const GAP = 12;
-    const CW = 96, CH = 152;
+    const STAGE = document.getElementById('stage');
+    const HINT = document.getElementById('hint');
+    const CTA  = document.getElementById('cta');
+    const GO   = document.getElementById('go');
 
-    const board = document.getElementById('board');
-    const cta = document.getElementById('cta');
-    const hint = document.getElementById('hint');
-    const continueBtn = document.getElementById('continueBtn');
+    const CW=96, CH=152, GAP=12, NEED=3, COUNT=7;
+    const faces = Array.from({length:22}, (_,i)=>`faces/${i}.png?v=12`);
 
-    // Layout positions (grid 4 x 2)
-    function posOf(idx){
-      const row = idx < 3 ? 0 : 1;     // 3 in first row, others in second
-      const col = row === 0 ? idx : (idx-3); // 0..2 for row0, 0..3 for row1 (but we use only 4 cards max place)
-      const left = col * (CW + GAP);
-      const top  = row * (CH + GAP);
-      return {left, top};
+    function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a}
+    const picked = shuffle([...faces]).slice(0, COUNT);
+
+    // initial positions (left/top only once)
+    function xy(i){
+      const row = i < 3 ? 0 : 1;
+      const col = row === 0 ? i : (i-3);
+      return [col*(CW+GAP), row*(CH+GAP)];
     }
 
-    // Prepare unique random faces
-    function pickUnique(arr, n){
-      const pool = [...arr];
-      for (let i = pool.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [pool[i], pool[j]] = [pool[j], pool[i]];
-      }
-      return pool.slice(0, n);
-    }
-
-    const facesPicked = pickUnique(FACES, COUNT);
-
-    // Build cards
     const cards = [];
     for (let i=0;i<COUNT;i++){
-      const card = document.createElement('div');
-      card.className = 'card';
-      const {left, top} = posOf(i<3?i: (i)); // initial positions in 3+4 grid
-      // For row 1 (i>=3) we place 4th slot too; last card will occupy col=3
-      card.style.left = left + 'px';
-      card.style.top = (i<3 ? 0 : (CH + GAP)) + 'px';
+      const [l,t] = xy(i);
+      const el = document.createElement('div');
+      el.className = 'card move';
+      el.style.left = l + 'px';
+      el.style.top  = t + 'px';
 
-      const back = document.createElement('div');
-      back.className = 'face back';
-
-      const front = document.createElement('div');
-      front.className = 'face front';
-      const img = document.createElement('img');
-      img.src = facesPicked[i];
+      const back = document.createElement('div'); back.className = 'face back';
+      const front = document.createElement('div'); front.className = 'face front';
+      const img = document.createElement('img'); img.src = picked[i];
       front.appendChild(img);
 
-      card.appendChild(back);
-      card.appendChild(front);
-      board.appendChild(card);
-
-      cards.push({el:card, idx:i, flipped:false, moving:false});
+      el.appendChild(back); el.appendChild(front);
+      STAGE.appendChild(el);
+      cards.push({el, flipped:false, dx:0, dy:0});
     }
 
-    let opened = 0;
-    let lastFlipped = null;
+    let opened=0, last=null;
+    function onClick(card){
+      if(card.flipped || opened>=NEED) return;
+      card.flipped = true;
+      card.el.classList.add('flipped');
+      opened++; last=card;
+      HINT.textContent = opened<NEED ? `Осталось выбрать: ${NEED-opened}` : 'Готово';
 
-    function onCardClick(cardObj){
-      if (cardObj.flipped) return;             // can't unflip
-      if (opened >= NEED) return;               // block after 3
-      cardObj.flipped = true;
-      cardObj.el.classList.add('is-flipped');
-      opened += 1;
-      lastFlipped = cardObj;
-
-      if (opened < NEED){
-        hint.textContent = `Осталось выбрать: ${NEED - opened}`;
-      } else {
-        hint.textContent = 'Отлично! Готовим карты…';
-        // Wait for the LAST flip transition to finish, then move to center
-        const onEnd = (e)=>{
-          if (e.propertyName !== 'transform') return;
-          cardObj.el.removeEventListener('transitionend', onEnd);
-          centerSelected();
+      if(opened===NEED){
+        const onEnd=(e)=>{
+          if(e.propertyName!=='transform') return;
+          card.el.removeEventListener('transitionend', onEnd);
+          moveToCenter();
         };
-        cardObj.el.addEventListener('transitionend', onEnd);
+        card.el.addEventListener('transitionend', onEnd);
       }
     }
+    cards.forEach(c=> c.el.addEventListener('click', ()=>onClick(c)) );
 
-    // Position three selected cards as a centered row (columns 0..2)
-    function centerSelected(){
-      const selected = cards.filter(c=>c.flipped);
-      // Compute center offset inside board (width for 4 cols)
-      // We'll center a 3-card row within the 4-col area
+    function moveToCenter(){
+      const chosen = cards.filter(c=>c.flipped);
+      // Compute target X offsets (center 3 cards in 4-col width)
       const totalW = 4*CW + 3*GAP;
       const rowW = 3*CW + 2*GAP;
-      const offsetLeft = (totalW - rowW)/2;
+      const left0 = (totalW - rowW)/2;
+      const topRow = CH + GAP; // visually middle
 
-      selected.forEach((c, k)=>{
-        const left = Math.round(offsetLeft + k*(CW+GAP));
-        const top  = Math.round(CH + GAP); // place in 2nd row area (visually middle of board)
-        c.el.style.left = left + 'px';
-        c.el.style.top = top + 'px';
+      chosen.forEach((c,k)=>{
+        // current left/top from style, compute dx/dy to target
+        const curLeft = parseInt(c.el.style.left||0,10);
+        const curTop  = parseInt(c.el.style.top||0,10);
+        const targetLeft = Math.round(left0 + k*(CW+GAP));
+        const targetTop  = Math.round(topRow);
+        const dx = targetLeft - curLeft;
+        const dy = targetTop  - curTop;
+        c.dx = dx; c.dy = dy;
+        c.el.style.transform = `rotateY(180deg) translate(${dx}px, ${dy}px)`;
       });
 
-      // Show CTA below the cards, aligned with board width
-      cta.classList.add('show');
+      CTA.classList.add('show');
     }
 
-    // Attach handlers
-    cards.forEach(c=> c.el.addEventListener('click', ()=>onCardClick(c)) );
-
-    // Prevent double-tap zoom on iOS
-    let lastTouch = 0;
-    document.addEventListener('touchend', e=>{
-      const now = Date.now();
-      if (now - lastTouch <= 350){ e.preventDefault(); }
-      lastTouch = now;
-    }, {passive:false});
-
-    continueBtn.addEventListener('click', ()=>{
-      // notify Telegram mini app (if available)
+    GO.addEventListener('click', ()=>{
       try{
-        if (window.Telegram && Telegram.WebApp) {
+        if (window.Telegram && Telegram.WebApp){
           Telegram.WebApp.sendData(JSON.stringify({type:"selection_done", count:NEED}));
           Telegram.WebApp.close();
+          return;
         }
       }catch(e){}
-      // fallback: alert
-      alert("Выбор сохранён. Возвращаемся в бота…");
+      alert('Выбор сохранён. Возвращаемся в бота…');
     });
   </script>
 </body>
