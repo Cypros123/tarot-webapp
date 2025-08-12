@@ -48,17 +48,17 @@
       transition: transform .2s ease;
     }
     .card-inner{
-      position:absolute; inset:0; transform-style:preserve-3d;
-      transition: transform 1s ease-in-out, box-shadow .35s ease; /* flip = 1s */
+      position:absolute; inset:0; transform-style:preserve-3d; -webkit-transform-style:preserve-3d;
+      transition: transform 1s ease-in-out, box-shadow .35s ease; -webkit-transition: -webkit-transform 1s ease-in-out, box-shadow .35s ease; /* flip = 1s */
       border-radius:14px; overflow:hidden;
       box-shadow:0 10px 22px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.04);
       will-change: transform;
       background:#1b1013;
     }
-    .card.selected .card-inner{ transform: rotateY(180deg); box-shadow: 0 0 22px rgba(233,200,145,.55), 0 10px 22px rgba(0,0,0,.55); }
+    .card.selected .card-inner{ transform: rotateY(180deg); -webkit-transform: rotateY(180deg); box-shadow: 0 0 22px rgba(233,200,145,.55), 0 10px 22px rgba(0,0,0,.55); }
     .card.locked{ pointer-events:none; }
 
-    .face,.back{ position:absolute; inset:0; backface-visibility:hidden; border-radius:14px; }
+    .face,.back{ position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden; border-radius:14px; }
     .back{
       background:
         radial-gradient(60% 40% at 30% 20%, rgba(233,200,145,.07), transparent 36%),
@@ -72,7 +72,7 @@
     .sigil::after{ content:""; position:absolute; inset:12%; border-radius:50%; border:1px solid rgba(217,179,108,.35); }
     .sigil svg{ width:70%; opacity:.9; }
 
-    .face{ transform: rotateY(180deg);
+    .face{ transform: rotateY(180deg); -webkit-transform: rotateY(180deg);
       background:
         radial-gradient(140% 120% at 50% -10%, rgba(250,220,150,.10), transparent 60%),
         linear-gradient(160deg, #2b181b, #1b1013 70%);
@@ -143,7 +143,7 @@
     const contbar = document.getElementById('contbar');
     const btn = document.getElementById('btnContinue');
 
-    function faceUrl(id){ return `faces/${id%22}.png`; }
+    function faceUrl(id){ const n = (id % 78).toString().padStart(2,'0'); return `../assets/cards/${n}.jpg`; }
 
     function computeCardWidth(){
       const vw = Math.min(window.innerWidth, document.documentElement.clientWidth);
@@ -185,6 +185,7 @@
       const art = document.createElement('div');
       art.className = 'art';
       const img = document.createElement('img'); img.src = faceUrl(id); img.alt = 'card';
+      img.onerror = () => { console.warn('Не удалось загрузить изображение', img.src); img.remove(); const ph = document.createElement('div'); ph.style.width='100%'; ph.style.height='100%'; ph.style.display='grid'; ph.style.placeItems='center'; ph.textContent = `#${String(id).padStart(2,'0')}`; ph.style.fontWeight='700'; ph.style.opacity='.85'; ph.style.fontSize='18px'; art.appendChild(ph); };
       art.appendChild(img); face.appendChild(art);
 
       inner.appendChild(back); inner.appendChild(face);
